@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<OAI-PMH>
+  
+  <Identify>
+    <repositoryName></repositoryName>
+    <!--<baseURL>http://localhost:8984/oai</baseURL>-->
+    <!--<protocolVersion>2.0</protocolVersion>-->
+    <adminEmail></adminEmail>
+    <!--<earliestDatestamp/>-->
+    <deletedRecord>transient</deletedRecord>
+    <granularity>YYYY-MM-DDThh:mm:ssZ</granularity>
+    <compression>deflate</compression>
+    <description></description>
+  </Identify>
+  
+  <ListX>
+    <resumptionToken maximumListSize="100"/>
+  </ListX>
+  
+  <ListSets>
+    <!--<set>
+      <setSpec></setSpec>
+      <setName></setName>
+      <setDescription></setDescription>
+    </set>-->
+  </ListSets>
+</OAI-PMH>
