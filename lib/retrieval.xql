@@ -8,7 +8,7 @@ xquery version "3.1";
   declare namespace output="http://www.w3.org/2010/xslt-xquery-serialization";
 
 (:~
-  
+  Convenience functions for sending requests with the EXPath HTTP Client module.
   
   @author Ashley M. Clark, for Digital Humanities Quarterly
   2019
@@ -43,7 +43,7 @@ xquery version "3.1";
         })
     let $params := string-join($params, '&amp;')
     return
-      concat($base-url,'?',$params)
+      iri-to-uri(concat($base-url,'?',$params))
   };
 
 

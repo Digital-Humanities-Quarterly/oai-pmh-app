@@ -124,8 +124,8 @@ xquery version "3.1";
     %rest:path("/oai/test")
   function oaixq:testing() {
     let $schemaNs := xs:anyURI('http://www.openarchives.org/OAI/2.0/oai_dc/')
-    let $query := 'oai.datestamp'
-    return oaisru:searchRetrieve($schemaNs, $query)
+    let $query := oaisru:make-time-range-query((), xs:date('2011-01-01'))
+    return oaisru:search-retrieve($schemaNs, $query)
   };
 
 
