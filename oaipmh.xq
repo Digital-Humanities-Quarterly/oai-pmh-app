@@ -3,6 +3,8 @@ xquery version "3.1";
   module namespace oaixq="http://digitalhumanities.org/dhq/ns/oaipmh-repo";
 (:  LIBRARIES  :)
   import module namespace request="http://exquery.org/ns/request";
+  import module namespace oaisru="http://digitalhumanities.org/dhq/ns/oaipmh-source/sru"
+    at "lib/source-sru.xql";
 (:  NAMESPACES  :)
   declare default element namespace "http://www.openarchives.org/OAI/2.0/";
   declare namespace map="http://www.w3.org/2005/xpath-functions/map";
@@ -115,13 +117,23 @@ xquery version "3.1";
       <error>{ $err:code }</error>
     }
   };
+  
+  
+  declare
+    %rest:GET
+    %rest:path("/oai/test")
+  function oaixq:testing() {
+    let $schemaNs := xs:anyURI('http://www.openarchives.org/OAI/2.0/oai_dc/')
+    let $query := 'oai.datestamp'
+    return oaisru:searchRetrieve($schemaNs, $query)
+  };
 
 
 
 (:  GENERALIZED REQUEST FUNCTIONS  :)
 
   
-  declare %private function oaixq:get-record($parameter-map as map(xs:string, xs:string*)) {
+  declare function oaixq:get-record($parameter-map as map(xs:string, xs:string*)) {
     let $recordId := $parameter-map?('identifier')
     let $metadataPrefix := $parameter-map?('metadataPrefix')
     let $record := ()
@@ -140,7 +152,7 @@ xquery version "3.1";
         </GetRecord>
   };
   
-  declare %private function oaixq:identify($parameter-map as map(xs:string, xs:string*)) {
+  declare function oaixq:identify($parameter-map as map(xs:string, xs:string*)) {
     let $confIdentify := $oaixq:configuration//*:Identify
     let $oaiProtocol := <protocolVersion>2.0</protocolVersion>
     let $earliestDatestamp := <earliestDatestamp></earliestDatestamp>
@@ -158,7 +170,7 @@ xquery version "3.1";
       return $useIdentify
   };
   
-  declare %private function oaixq:list-identifiers($parameter-map as map(xs:string, xs:string*)) {
+  declare function oaixq:list-identifiers($parameter-map as map(xs:string, xs:string*)) {
     let $from := $parameter-map?('from')
     let $until := $parameter-map?('until')
     let $metadataPrefix := $parameter-map?('metadataPrefix')
@@ -176,7 +188,7 @@ xquery version "3.1";
         </ListIdentifiers>
   };
   
-  declare %private function oaixq:list-metadata-formats($parameter-map as map(xs:string, xs:string*)) {
+  declare function oaixq:list-metadata-formats($parameter-map as map(xs:string, xs:string*)) {
     let $recordId := $parameter-map?('identifier')
     let $formats := ()
     let $record := ()
@@ -199,7 +211,7 @@ xquery version "3.1";
         </ListMetadataFormats>
   };
   
-  declare %private function oaixq:list-records($parameter-map as map(xs:string, xs:string*)) {
+  declare function oaixq:list-records($parameter-map as map(xs:string, xs:string*)) {
     let $from := $parameter-map?('from')
     let $until := $parameter-map?('until')
     let $metadataPrefix := $parameter-map?('metadataPrefix')
@@ -217,7 +229,7 @@ xquery version "3.1";
         </ListRecords>
   };
   
-  declare %private function oaixq:list-sets($parameter-map as map(xs:string, xs:string*)) {
+  declare function oaixq:list-sets($parameter-map as map(xs:string, xs:string*)) {
     let $resumptionToken := $parameter-map?('resumptionToken')
     return
       if ( not(oaixq:supports-sets()) ) then

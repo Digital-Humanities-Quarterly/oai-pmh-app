@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<OAI-PMH>
+<OAI-PMH source="sru">
+  
+  <SRU xmlns:zr="http://explain.z3950.org/dtd/2.1/">
+    <baseURL>http://digitalhumanities.org:8081/dhq/sru</baseURL>
+  </SRU>
   
   <Identify>
     <repositoryName></repositoryName>
