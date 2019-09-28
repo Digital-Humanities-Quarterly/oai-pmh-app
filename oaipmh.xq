@@ -20,7 +20,7 @@ xquery version "3.1";
 
 
 (:  VARIABLES  :)
-  declare variable $oaixq:configuration := doc('CONFIG.xml');
+  declare variable $oaixq:configuration := doc('CONFIG.xml')/*;
   declare variable $oaixq:request-types := 
     map {
       'GetRecord': map {
@@ -67,7 +67,8 @@ xquery version "3.1";
             }
         }
     };
-
+    
+    declare variable $oaixq:source := $oaixq:configuration/@source/data(.);
 
 
 (:  FUNCTIONS  :)
@@ -123,9 +124,7 @@ xquery version "3.1";
     %rest:GET
     %rest:path("/oai/test")
   function oaixq:testing() {
-    let $schemaNs := xs:anyURI('http://www.openarchives.org/OAI/2.0/oai_dc/')
-    let $query := oaisru:make-time-range-query((), xs:date('2011-01-01'))
-    return oaisru:search-retrieve($schemaNs, $query)
+    oaisru:get-header('oai:digitalhumanities.org:dhq/000081')
   };
 
 
@@ -136,18 +135,18 @@ xquery version "3.1";
   declare function oaixq:get-record($parameter-map as map(xs:string, xs:string*)) {
     let $recordId := $parameter-map?('identifier')
     let $metadataPrefix := $parameter-map?('metadataPrefix')
-    let $record := ()
+    let $header := oaixq:function-lookup('get-header')($recordId)
+    let $record := oaixq:function-lookup('get-record')($recordId)
     return
       if ( not(exists($record)) ) then
         oaixq:generate-oai-error('idDoesNotExist') (: The metadata format may not be available either. :)
       else 
         <GetRecord>
           <record>
-            <header>
-              <identifier>{ $recordId }</identifier>
-              <datestamp></datestamp>
-            </header>
-            <metadata></metadata>
+            { $header }
+            <metadata>
+              { $record }
+            </metadata>
           </record>
         </GetRecord>
   };
@@ -242,6 +241,17 @@ xquery version "3.1";
 
 
 (:  SUPPORT FUNCTIONS  :)
+  
+  declare %private function oaixq:function-lookup($function-name as xs:string) {
+    let $fn-map := map {
+        'sru' : map {
+          'get-header': oaisru:get-header#1,
+          'get-record': oaisru:get-record#1
+        }
+      }
+    return
+      $fn-map?($oaixq:source)?($function-name)
+  };
   
   declare %private function oaixq:generate-oai-error($code as xs:string) {
     let $errorDescriptions := map {

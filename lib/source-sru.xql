@@ -7,6 +7,8 @@ xquery version "3.1";
 (:  NAMESPACES  :)
   declare namespace http="http://expath.org/ns/http-client";
   declare namespace map="http://www.w3.org/2005/xpath-functions/map";
+  declare namespace oai="http://www.openarchives.org/OAI/2.0/";
+  declare namespace oaidc="http://www.openarchives.org/OAI/2.0/oai_dc/";
   declare namespace output="http://www.w3.org/2010/xslt-xquery-serialization";
   declare namespace rest="http://exquery.org/ns/restxq";
   declare namespace sru="http://www.loc.gov/zing/srw/";
@@ -21,22 +23,52 @@ xquery version "3.1";
  
 (:  VARIABLES  :)
   declare variable $oaisru:config := doc('../CONFIG.xml')//SRU;
-  declare variable $oaisru:baseUrl := $oaisru:config/baseURL/normalize-space(.);
-  declare variable $oaisru:explain := rtrv:get($oaisru:baseUrl);
+  declare variable $oaisru:base-url := $oaisru:config/baseURL/normalize-space(.);
+  declare variable $oaisru:explain := rtrv:get($oaisru:base-url);
+  
+  declare variable $oaisru:schema-oaidc := 
+    xs:anyURI('http://www.openarchives.org/OAI/2.0/oai_dc/');
+  declare variable $oaisru:schema-oaiheader := 
+    xs:anyURI('http://www.openarchives.org/OAI/2.0/%23header');
+
 
 (:  FUNCTIONS  :)
+  
+  declare function oaisru:get-header($identifier as xs:string) {
+    let $query := oaisru:query-by-id($identifier)
+    let $sruResponse :=
+      oaisru:search-retrieve($oaisru:schema-oaiheader, $query)
+    let $header := $sruResponse//oai:header
+    return
+      $header
+  };
+  
+  declare function oaisru:get-record($identifier as xs:string) {
+    let $query := oaisru:query-by-id($identifier)
+    let $sruResponse :=
+      oaisru:search-retrieve($oaisru:schema-oaidc, $query)
+    return
+      $sruResponse//oaidc:dc
+  };
+  
+  (:~
+    Construct a query in CQL to find an OAI-PMH record with a given identifier.
+   :)
+  declare function oaisru:query-by-id($identifier as xs:string) {
+    concat('oai.identifier exact "',$identifier,'"')
+  };
   
   (:~
     Construct a query in CQL to find all OAI-PMH records between two dates.
    :)
-  declare function oaisru:make-time-range-query($from as xs:date?, $to as xs:date?) {
+  declare function oaisru:query-by-date-range($from as xs:date?, $to as xs:date?) {
     let $useFrom :=
       if ( exists($from) ) then
-        concat('oai.datestamp &gt;= ', $from)
+        concat('oai.datestamp &gt;= "', $from,'"')
       else ()
     let $useTo :=
       if ( exists($to) ) then
-        concat('oai.datestamp &lt;= ', $to)
+        concat('oai.datestamp &lt;= ', $to,'"')
       else ()
     return 
       if ( empty($useFrom) and empty($useTo) ) then
@@ -67,8 +99,8 @@ xquery version "3.1";
           'startRecord': $start-record
         }
       return
-(:        rtrv:make-url($oaisru:baseUrl, $params):)
-        rtrv:get($oaisru:baseUrl, $params)
+(:        rtrv:make-url($oaisru:base-url, $params):)
+        rtrv:get($oaisru:base-url, $params)
     (:else ():)
   };
 
