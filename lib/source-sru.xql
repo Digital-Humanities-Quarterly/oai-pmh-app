@@ -79,6 +79,35 @@ xquery version "3.1";
   };
   
   (:~
+    Given a namespace and query string, send a "searchRetrieve" request to the SRU service listed in the 
+    configuration file. This request assumes that the list of records should begin at index position 1.
+   :)
+  declare function oaisru:search-retrieve($schema as xs:anyURI, $query as xs:string) {
+    oaisru:search-retrieve($schema, $query, 1)
+  };
+  
+  (:~
+    Given a namespace, query string, and index position, send a "searchRetrieve" request to the SRU 
+    service listed in the configuration file.
+   :)
+  declare function oaisru:search-retrieve($schema as xs:anyURI, $query as xs:string, $start-record as xs:integer?) {
+(:    if ( $schema = $oaisru:explain//zr:schema/@identifier/xs:anyURI(.) ) then:)
+      let $params := map {
+          'version': '1.1',
+          'operation': 'searchRetrieve',
+          'recordSchema': $schema,
+          'query': $query,
+          'startRecord': $start-record
+        }
+      return
+        rtrv:get($oaisru:base-url, $params)
+(:    else ():)
+  };
+
+
+(:  SUPPORT FUNCTIONS  :)
+  
+  (:~
     Retrieve metadata records through recursive calls to an SRU repository. The configured maximum list 
     size (see CONFIG.xml) is used as an upper bound.
    :)
@@ -138,32 +167,3 @@ xquery version "3.1";
       else
         string-join(($useFrom, $useTo), ' and ')
   };
-  
-  (:~
-    Given a namespace and query string, send a "searchRetrieve" request to the SRU service listed in the 
-    configuration file. This request assumes that the list of records should begin at index position 1.
-   :)
-  declare function oaisru:search-retrieve($schema as xs:anyURI, $query as xs:string) {
-    oaisru:search-retrieve($schema, $query, 1)
-  };
-  
-  (:~
-    Given a namespace, query string, and index position, send a "searchRetrieve" request to the SRU 
-    service listed in the configuration file.
-   :)
-  declare function oaisru:search-retrieve($schema as xs:anyURI, $query as xs:string, $start-record as xs:integer?) {
-(:    if ( $schema = $oaisru:explain//zr:schema/@identifier/xs:anyURI(.) ) then:)
-      let $params := map {
-          'version': '1.1',
-          'operation': 'searchRetrieve',
-          'recordSchema': $schema,
-          'query': $query,
-          'startRecord': $start-record
-        }
-      return
-        rtrv:get($oaisru:base-url, $params)
-(:    else ():)
-  };
-
-
-(:  SUPPORT FUNCTIONS  :)
