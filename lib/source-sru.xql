@@ -5,6 +5,7 @@ xquery version "3.1";
   import module namespace rtrv="http://digitalhumanities.org/dhq/ns/oaipmh-source/retrieval"
     at "retrieval.xql";
 (:  NAMESPACES  :)
+  declare namespace array="http://www.w3.org/2005/xpath-functions/array";
   declare namespace http="http://expath.org/ns/http-client";
   declare namespace map="http://www.w3.org/2005/xpath-functions/map";
   declare namespace oai="http://www.openarchives.org/OAI/2.0/";
@@ -12,7 +13,9 @@ xquery version "3.1";
   declare namespace output="http://www.w3.org/2010/xslt-xquery-serialization";
   declare namespace rest="http://exquery.org/ns/restxq";
   declare namespace sru="http://www.loc.gov/zing/srw/";
-  declare namespace zr="http://explain.z3950.org/dtd/2.1/";
+  declare namespace zr="http://explain.z3950.org/dtd/2.0/";
+  
+  declare copy-namespaces no-preserve, inherit;
 
 (:~
   Query and retrieve metadata records from an SRU (Search/Retrieve via URL) repository.
@@ -51,6 +54,65 @@ xquery version "3.1";
       $sruResponse//oaidc:dc
   };
   
+  declare function oaisru:list-identifiers($metadata-prefix as xs:string) {
+    oaisru:list-identifiers($metadata-prefix, (), (), (), ())
+  };
+  
+  declare function oaisru:list-identifiers($metadata-prefix as xs:string, $from as item()?, $to as item()?, $set as item()?, $resumption-token as item()?) {
+    let $query := oaisru:query-by-date-range($from, $to)
+    let $sruResults :=
+      oaisru:manage-results($oaisru:schema-oaiheader, $query, 1)
+    let $records := 
+      for $header in $sruResults
+      let $serialized :=
+        serialize($header, map {
+            'indent': 'no', 'method': 'xml', 'undeclare-prefixes': 'yes', 
+            'version': '1.1'
+          })
+      let $replacePrefixes := 
+        replace($serialized, '(</?)oai:', '$1')
+        => replace('xmlns:oai=', 'xmlns=')
+        => replace('\s+xmlns:srw="http://www.loc.gov/zing/srw/"', '')
+      return
+        parse-xml($replacePrefixes)
+    return $records
+  };
+  
+  (:~
+    Retrieve metadata records through recursive calls to an SRU repository. The configured maximum list 
+    size (see CONFIG.xml) is used as an upper bound.
+   :)
+  declare function oaisru:manage-results($schema as xs:anyURI, $query as xs:string, $start-record as xs:integer) {
+    let $oaiMax := 
+      doc('../CONFIG.xml')//ListX/resumptionToken/@maximumListSize/xs:integer(.)
+    return oaisru:manage-results($schema, $query, $start-record, $oaiMax)
+  };
+  
+  (:~
+    Make a retrieval request of an SRU repository, and test the response against the target number of 
+    records.
+   :)
+  declare %private function oaisru:manage-results($schema as xs:anyURI, $query as xs:string, $start-record as xs:integer, $target as xs:integer) {
+    let $sruMax := 
+      $oaisru:explain//zr:setting[@type eq 'maximumRecords']/normalize-space(.)
+    let $req1 := oaisru:search-retrieve($schema, $query, $start-record)
+    let $records := $req1//sru:recordData/*
+    let $nextRecord :=
+      $req1/sru:searchRetrieveResponse/sru:nextRecordPosition/xs:integer(.)
+    let $totalRecords := 
+      $req1/sru:searchRetrieveResponse/sru:numberOfRecords/xs:integer(.)
+    return
+      if ( count($records) gt $target ) then (: TODO resumption token :)
+        subsequence($records, 1, $target)
+      else if ( exists($nextRecord) and count($records) lt $target ) then (: TODO resumption token :)
+        let $revisedTarget := $target - count($records)
+        let $addtlRecords := 
+          oaisru:manage-results($schema, $query, $nextRecord, $revisedTarget)
+        return
+          ( $records, $addtlRecords )
+      else $records
+  };
+  
   (:~
     Construct a query in CQL to find an OAI-PMH record with a given identifier.
    :)
@@ -61,14 +123,14 @@ xquery version "3.1";
   (:~
     Construct a query in CQL to find all OAI-PMH records between two dates.
    :)
-  declare function oaisru:query-by-date-range($from as xs:date?, $to as xs:date?) {
+  declare function oaisru:query-by-date-range($from as item()?, $to as xs:date?) {
     let $useFrom :=
-      if ( exists($from) ) then
+      if ( $from castable as xs:date ) then
         concat('oai.datestamp &gt;= "', $from,'"')
       else ()
     let $useTo :=
-      if ( exists($to) ) then
-        concat('oai.datestamp &lt;= ', $to,'"')
+      if ( $to castable as xs:date ) then
+        concat('oai.datestamp &lt;= "', $from,'"')
       else ()
     return 
       if ( empty($useFrom) and empty($useTo) ) then
@@ -89,8 +151,8 @@ xquery version "3.1";
     Given a namespace, query string, and index position, send a "searchRetrieve" request to the SRU 
     service listed in the configuration file.
    :)
-  declare function oaisru:search-retrieve($schema as xs:anyURI, $query as xs:string, $start-record as xs:integer) {
-    (:if ( $schema = $oaisru:explain//zr:schema/@identifier/xs:anyURI(.) ) then:)
+  declare function oaisru:search-retrieve($schema as xs:anyURI, $query as xs:string, $start-record as xs:integer?) {
+(:    if ( $schema = $oaisru:explain//zr:schema/@identifier/xs:anyURI(.) ) then:)
       let $params := map {
           'version': '1.1',
           'operation': 'searchRetrieve',
@@ -99,11 +161,9 @@ xquery version "3.1";
           'startRecord': $start-record
         }
       return
-(:        rtrv:make-url($oaisru:base-url, $params):)
         rtrv:get($oaisru:base-url, $params)
-    (:else ():)
+(:    else ():)
   };
 
 
 (:  SUPPORT FUNCTIONS  :)
-  

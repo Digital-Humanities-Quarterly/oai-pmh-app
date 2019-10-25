@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <OAI-PMH source="sru">
   
-  <SRU xmlns:zr="http://explain.z3950.org/dtd/2.1/">
+  <SRU xmlns:zr="http://explain.z3950.org/dtd/2.0/">
     <baseURL>http://digitalhumanities.org:8081/dhq/sru</baseURL>
   </SRU>
   

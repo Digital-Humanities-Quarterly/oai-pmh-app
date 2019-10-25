@@ -2,9 +2,9 @@ xquery version "3.1";
 
   module namespace oaixq="http://digitalhumanities.org/dhq/ns/oaipmh-repo";
 (:  LIBRARIES  :)
-  import module namespace request="http://exquery.org/ns/request";
   import module namespace oaisru="http://digitalhumanities.org/dhq/ns/oaipmh-source/sru"
     at "lib/source-sru.xql";
+  import module namespace request="http://exquery.org/ns/request";
 (:  NAMESPACES  :)
   declare default element namespace "http://www.openarchives.org/OAI/2.0/";
   declare namespace map="http://www.w3.org/2005/xpath-functions/map";
@@ -160,7 +160,7 @@ xquery version "3.1";
       copy $useIdentify := $confIdentify
       modify
       (
-        if ( not(exists($useIdentify/*:baseURL)) ) then
+        if ( not(exists($useIdentify/Q{}baseURL)) ) then
           insert node $requestUri after $useIdentify/*:repositoryName
         else (),
         insert node $oaiProtocol before ($useIdentify/*:adminEmail)[1],
@@ -175,7 +175,8 @@ xquery version "3.1";
     let $metadataPrefix := $parameter-map?('metadataPrefix')
     let $set := $parameter-map?('set')
     let $resumptionToken := $parameter-map?('resumptionToken')
-    let $recordSet := ()
+    let $recordSet := 
+      oaixq:function-lookup('list-identifiers')($metadataPrefix, $from, $until, $set, $resumptionToken)
     return
       if ( $set and not(oaixq:supports-sets()) ) then
         oaixq:generate-oai-error('noSetHierarchy')
@@ -183,7 +184,7 @@ xquery version "3.1";
         oaixq:generate-oai-error('noRecordsMatch')
       else
         <ListIdentifiers>
-          
+          { $recordSet }
         </ListIdentifiers>
   };
   
@@ -246,7 +247,8 @@ xquery version "3.1";
     let $fn-map := map {
         'sru' : map {
           'get-header': oaisru:get-header#1,
-          'get-record': oaisru:get-record#1
+          'get-record': oaisru:get-record#1,
+          'list-identifiers': oaisru:list-identifiers#5
         }
       }
     return
@@ -306,6 +308,7 @@ xquery version "3.1";
   declare %private function oaixq:format-response($response as node()+, $verb as xs:string?, 
      $parameter-map as map(xs:string, xs:string*)?) {
     <OAI-PMH xmlns="http://www.openarchives.org/OAI/2.0/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:oai="http://www.openarchives.org/OAI/2.0/"
        xsi:schemaLocation="http://www.openarchives.org/OAI/2.0/ http://www.openarchives.org/OAI/2.0/OAI-PMH.xsd">
       <responseDate>{ oaixq:get-utc-datestamp() }</responseDate>
       <request>{
