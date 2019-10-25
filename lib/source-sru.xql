@@ -54,28 +54,31 @@ xquery version "3.1";
       $sruResponse//oaidc:dc
   };
   
-  declare function oaisru:list-identifiers($metadata-prefix as xs:string) {
-    oaisru:list-identifiers($metadata-prefix, (), (), (), ())
-  };
-  
   declare function oaisru:list-identifiers($metadata-prefix as xs:string, $from as item()?, $to as item()?, $set as item()?, $resumption-token as item()?) {
     let $query := oaisru:query-by-date-range($from, $to)
     let $sruResults :=
       oaisru:manage-results($oaisru:schema-oaiheader, $query, 1)
+    (: Get rid of the "oai" prefix, since the OAI-PMH wrapper isn't using it. Also get rid of the SRU 
+      namespace. Manipulating the plain text serialization is not an elegant (XML-aware) way to 
+      accomplish these tasks, but it's fast and easy to implement. :)
     let $records := 
       for $header in $sruResults
       let $serialized :=
-        serialize($header, map {
-            'indent': 'no', 'method': 'xml', 'undeclare-prefixes': 'yes', 
-            'version': '1.1'
-          })
+        serialize($header, map {'indent': 'no', 'method': 'xml'})
       let $replacePrefixes := 
         replace($serialized, '(</?)oai:', '$1')
         => replace('xmlns:oai=', 'xmlns=')
-        => replace('\s+xmlns:srw="http://www.loc.gov/zing/srw/"', '')
+        => replace('\s+xmlns:srw="http://www\.loc\.gov/zing/srw/"', '')
       return
         parse-xml($replacePrefixes)
     return $records
+  };
+  
+  declare function oaisru:list-records($metadata-prefix as xs:string, $from as item()?, $to as item()?, $set as item()?, $resumption-token as item()?) {
+    let $query := oaisru:query-by-date-range($from, $to)
+    let $sruResults :=
+      oaisru:manage-results($oaisru:schema-oaidc, $query, 1)
+    return $sruResults
   };
   
   (:~

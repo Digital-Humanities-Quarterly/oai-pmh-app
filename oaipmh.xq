@@ -217,7 +217,8 @@ xquery version "3.1";
     let $metadataPrefix := $parameter-map?('metadataPrefix')
     let $set := $parameter-map?('set')
     let $resumptionToken := $parameter-map?('resumptionToken')
-    let $recordSet := ()
+    let $recordSet := 
+      oaixq:function-lookup('list-records')($metadataPrefix, $from, $until, $set, $resumptionToken)
     return
       if ( $set and not(oaixq:supports-sets()) ) then
         oaixq:generate-oai-error('noSetHierarchy')
@@ -225,7 +226,7 @@ xquery version "3.1";
         oaixq:generate-oai-error('noRecordsMatch')
       else
         <ListRecords>
-          
+          { $recordSet }
         </ListRecords>
   };
   
@@ -248,7 +249,8 @@ xquery version "3.1";
         'sru' : map {
           'get-header': oaisru:get-header#1,
           'get-record': oaisru:get-record#1,
-          'list-identifiers': oaisru:list-identifiers#5
+          'list-identifiers': oaisru:list-identifiers#5,
+          'list-records': oaisru:list-records#5
         }
       }
     return
