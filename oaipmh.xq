@@ -190,24 +190,15 @@ xquery version "3.1";
   
   declare function oaixq:list-metadata-formats($parameter-map as map(xs:string, xs:string*)) {
     let $recordId := $parameter-map?('identifier')
-    let $formats := ()
-    let $record := ()
+    let $formats := oaixq:function-lookup('list-metadata-formats')($recordId)
     return
-      if ( not(exists($record)) ) then
+      if ( not(exists($formats)) ) then
         oaixq:generate-oai-error('idDoesNotExist')
-      else if ( empty($formats) ) then
+      else if ( empty($formats) ) then (: TODO: current code will never fire. Check the SRU Explain. :)
         oaixq:generate-oai-error('noMetadataFormats')
       else
         <ListMetadataFormats>
-        {
-          for $format in $formats
-          return
-            <metadataFormat>
-              <metadataPrefix></metadataPrefix>
-              <schema></schema>
-              <metadataNamespace></metadataNamespace>
-            </metadataFormat>
-        }
+          { $formats }
         </ListMetadataFormats>
   };
   
@@ -250,11 +241,14 @@ xquery version "3.1";
           'get-header': oaisru:get-header#1,
           'get-record': oaisru:get-record#1,
           'list-identifiers': oaisru:list-identifiers#5,
+          'list-metadata-formats': oaisru:list-metadata-formats#1,
           'list-records': oaisru:list-records#5
         }
       }
     return
-      $fn-map?($oaixq:source)?($function-name)
+      try {
+        $fn-map?($oaixq:source)?($function-name)
+      } catch * { () }
   };
   
   declare %private function oaixq:generate-oai-error($code as xs:string) {
