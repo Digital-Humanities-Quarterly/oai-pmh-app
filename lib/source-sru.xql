@@ -31,10 +31,13 @@ xquery version "3.1";
   
   declare variable $oaisru:schema-oaidc := 
     xs:anyURI('http://www.openarchives.org/OAI/2.0/oai_dc/');
-  declare variable $oaisru:schema-oaiheader := 
+  declare variable $oaisru:schema-oaiheader :=
     xs:anyURI('http://www.openarchives.org/OAI/2.0/');
   declare variable $oaisru:all-namespaces :=
     $oaisru:explain//zr:schemaInfo/zr:schema/@identifier/data(.);
+  
+  declare variable $oaisru:schema-tmpheader :=
+    xs:anyURI('http://www.openarchives.org/OAI/2.0/%23header');
 
 
 (:  FUNCTIONS  :)
@@ -56,10 +59,7 @@ xquery version "3.1";
      $to as item()?, $set as item()?, $resumption-token as item()?) {
     let $query := oaisru:query-by-date-range($from, $to)
     let $sruResults :=
-      oaisru:manage-results($oaisru:schema-oaiheader, $query, 1)
-    (: Get rid of the "oai" prefix, since the OAI-PMH wrapper isn't using it. Also get rid of the SRU 
-      namespace. Manipulating the plain text serialization is not an elegant (XML-aware) way to 
-      accomplish these tasks, but it's fast and easy to implement. :)
+      oaisru:manage-results($oaisru:schema-tmpheader, $query, 1)
     let $records := 
       for $header in $sruResults
       let $serialized :=
@@ -99,9 +99,24 @@ xquery version "3.1";
   declare function oaisru:list-records($metadata-prefix as xs:string, $from as item()?, 
      $to as item()?, $set as item()?, $resumption-token as item()?) {
     let $query := oaisru:query-by-date-range($from, $to)
-    let $sruResults :=
-      oaisru:manage-results($oaisru:schema-oaidc, $query, 1)
-    return $sruResults
+    let $schema := oaisru:dereference-prefix($metadata-prefix)
+    let $tmpNs := xs:anyURI(concat(xs:string($oaisru:schema-oaiheader), '%23header'))
+    let $headers := oaisru:manage-results($tmpNs, $query, 1)
+    let $records :=
+      if ( exists($schema) ) then
+        oaisru:manage-results($schema, $query, 1)
+      else ()
+    return (: TODO: this assumes that the header will be in sync with the record, but this may not be the case! :)
+      for $index in 1 to count($records)
+      let $header := $headers[$index]
+      let $record := $records[$index]
+      return
+        <record xmlns="http://www.openarchives.org/OAI/2.0/">
+          { oaisru:clean-oai-header($header) }
+          <metadata>
+            { $record }
+          </metadata>
+        </record>
   };
   
   (:~
@@ -118,7 +133,7 @@ xquery version "3.1";
    :)
   declare function oaisru:search-retrieve($schema as xs:anyURI, $query as xs:string, 
      $start-record as xs:integer?) {
-    if ( xs:string($schema) = $oaisru:all-namespaces ) then
+    if ( xs:string($schema) = ($oaisru:all-namespaces, $oaisru:schema-tmpheader) ) then
       let $params := map {
           'version': '1.1',
           'operation': 'searchRetrieve',
@@ -133,6 +148,29 @@ xquery version "3.1";
 
 
 (:  SUPPORT FUNCTIONS  :)
+  
+  (:~
+    Get rid of the "oai" prefix, since the OAI-PMH wrapper isn't using it. Also get rid of the SRU 
+    namespace. Manipulating the plain text serialization is not an elegant (XML-aware) way to accomplish 
+    these tasks, but it's fast and easy to implement.
+   :)
+  declare %private function oaisru:clean-oai-header($header as item()) {
+    let $serialized :=
+      serialize($header, map {'indent': 'no', 'method': 'xml'})
+    let $replacePrefixes := 
+      replace($serialized, '(</?)oai:', '$1')
+      => replace('xmlns:oai=', 'xmlns=')
+      => replace('\s+xmlns:srw="http://www\.loc\.gov/zing/srw/"', '')
+    return
+      parse-xml($replacePrefixes)
+  };
+  
+  (:~
+    Given a prefix for a metadata standard, retrieve the schema namespace with which it is associated.
+   :)
+  declare function oaisru:dereference-prefix($metadata-prefix as xs:string) as xs:anyURI? {
+    $oaisru:explain//zr:schemaInfo/zr:schema[@name eq $metadata-prefix]/@identifier/xs:anyURI(.)
+  };
   
   (:~
     Retrieve metadata records through recursive calls to an SRU repository. The configured maximum list 
@@ -174,7 +212,7 @@ xquery version "3.1";
   (:~
     Construct a query in CQL to find all OAI-PMH records between two dates.
    :)
-  declare function oaisru:query-by-date-range($from as item()?, $to as xs:date?) {
+  declare %private function oaisru:query-by-date-range($from as item()?, $to as xs:date?) {
     let $useFrom :=
       if ( $from castable as xs:date ) then
         concat('oai.datestamp &gt;= "', $from,'"')
@@ -185,7 +223,7 @@ xquery version "3.1";
       else ()
     return 
       if ( empty($useFrom) and empty($useTo) ) then
-        'oai.datestamp'
+        'oai.datestamp=all'
       else
         string-join(($useFrom, $useTo), ' and ')
   };
@@ -193,6 +231,6 @@ xquery version "3.1";
   (:~
     Construct a query in CQL to find an OAI-PMH record with a given identifier.
    :)
-  declare function oaisru:query-by-id($identifier as xs:string) {
+  declare %private function oaisru:query-by-id($identifier as xs:string) {
     concat('oai.identifier exact "',$identifier,'"')
   };

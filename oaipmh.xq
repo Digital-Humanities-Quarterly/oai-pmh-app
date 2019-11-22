@@ -192,9 +192,9 @@ xquery version "3.1";
     let $recordId := $parameter-map?('identifier')
     let $formats := oaixq:function-lookup('list-metadata-formats')($recordId)
     return
-      if ( not(exists($formats)) ) then
+      (:if ( exists($recordId) and empty($formats) ) then
         oaixq:generate-oai-error('idDoesNotExist')
-      else if ( empty($formats) ) then (: TODO: current code will never fire. Check the SRU Explain. :)
+      else:) if ( exists($recordId) and empty($formats) ) then
         oaixq:generate-oai-error('noMetadataFormats')
       else
         <ListMetadataFormats>
