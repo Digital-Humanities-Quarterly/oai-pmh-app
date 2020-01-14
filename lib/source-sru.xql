@@ -62,14 +62,7 @@ xquery version "3.1";
       oaisru:manage-results($oaisru:schema-tmpheader, $query, 1)
     let $records := 
       for $header in $sruResults
-      let $serialized :=
-        serialize($header, map {'indent': 'no', 'method': 'xml'})
-      let $replacePrefixes := 
-        replace($serialized, '(</?)oai:', '$1')
-        => replace('xmlns:oai=', 'xmlns=')
-        => replace('\s+xmlns:srw="http://www\.loc\.gov/zing/srw/"', '')
-      return
-        parse-xml($replacePrefixes)
+      return oaisru:clean-oai-header($header)
     return $records
   };
   
