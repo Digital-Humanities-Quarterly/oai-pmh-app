@@ -46,7 +46,7 @@ xquery version "3.1";
     let $query := oaisru:query-by-id($identifier)
     let $sruResponse := oaisru:search-retrieve($oaisru:schema-oaiheader, $query)
     let $header := $sruResponse//oai:header
-    return $header
+    return oaisru:clean-oai-header($header)
   };
   
   declare function oaisru:get-record($identifier as xs:string) {
