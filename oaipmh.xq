@@ -183,10 +183,13 @@ xquery version "3.1";
         oaixq:generate-oai-error('noSetHierarchy')
       else if ( empty($recordSet) ) then
         oaixq:generate-oai-error('noRecordsMatch')
-      else
-        <ListIdentifiers>
-          { $recordSet }
-        </ListIdentifiers>
+      else (
+          <ListIdentifiers>
+            { $recordSet[not(self::resumptionToken)] }
+          </ListIdentifiers>
+          ,
+          $recordSet[self::resumptionToken]
+        )
   };
   
   declare function oaixq:list-metadata-formats($parameter-map as map(xs:string, item()?)) {
@@ -263,6 +266,20 @@ xquery version "3.1";
       }
     return
       <error code="{$code}">{ $errorDescriptions?($code) }</error>
+  };
+  
+  declare function oaixq:generate-resumption-token($token as xs:string?, $record-index as 
+     xs:integer, $total-size as xs:integer?) {
+    let $cursor :=
+      if ( $record-index ge 0 ) then
+        attribute cursor { $record-index }
+      else ()
+    let $listSize :=
+      if ( exists($total-size) and $total-size gt 0 ) then
+        attribute completeListSize { $total-size }
+      else ()
+    return
+      <resumptionToken>{ $cursor, $listSize }</resumptionToken>
   };
   
   declare %private function oaixq:get-usable-date($date as xs:string*, $parameter-name as xs:string) {
@@ -389,7 +406,7 @@ xquery version "3.1";
     $oaixq:configuration//*:granularity[1]/text() eq "YYYY-MM-DDThh:mm:ssZ"
   };
   
-  (: An OAI-PMH request argument is only valid if (1) all required parameters are present; (2) all 
+  (: An OAI-PMH request argument is only valid if: (1) all required parameters are present; (2) all 
     expected parameters have only one value (no doubled parameters); and (3) there aren't any unexpected 
     parameters. :)
   declare %private function oaixq:validate-arguments($parameter-map as map(xs:string, item()*), 

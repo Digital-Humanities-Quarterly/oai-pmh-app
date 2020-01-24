@@ -4,6 +4,8 @@ xquery version "3.1";
 (:  LIBRARIES  :)
   import module namespace rtrv="http://digitalhumanities.org/dhq/ns/oaipmh-source/retrieval"
     at "retrieval.xql";
+  import module namespace oaixq="http://digitalhumanities.org/dhq/ns/oaipmh-repo"
+    at "../oaipmh.xq";
 (:  NAMESPACES  :)
   declare namespace array="http://www.w3.org/2005/xpath-functions/array";
   declare namespace http="http://expath.org/ns/http-client";
@@ -190,15 +192,17 @@ xquery version "3.1";
       $req1/sru:searchRetrieveResponse/sru:nextRecordPosition/xs:integer(.)
     let $totalRecords := 
       $req1/sru:searchRetrieveResponse/sru:numberOfRecords/xs:integer(.)
+    let $resToken :=
+      oaixq:generate-resumption-token((), $start-record - 1, $totalRecords)
     return
-      if ( count($records) gt $target ) then (: TODO resumption token :)
-        subsequence($records, 1, $target)
-      else if ( exists($nextRecord) and count($records) lt $target ) then (: TODO resumption token :)
+      if ( count($records) gt $target ) then
+        ( subsequence($records, 1, $target), $resToken )
+      else if ( exists($nextRecord) and count($records) lt $target ) then
         let $revisedTarget := $target - count($records)
         let $addtlRecords := 
           oaisru:manage-results($schema, $query, $nextRecord, $revisedTarget)
         return
-          ( $records, $addtlRecords )
+          ( $records, $addtlRecords, $resToken )
       else $records
   };
   
