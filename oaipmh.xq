@@ -124,7 +124,8 @@ xquery version "3.1";
     %rest:GET
     %rest:path("/oai/test")
   function oaixq:testing() {
-    oaisru:get-header('oai:digitalhumanities.org:dhq/000081')
+    oaisru:list-identifiers('oai_dc', xs:date('2015-01-01'), (), 
+      (), ())
   };
 
 
@@ -132,7 +133,7 @@ xquery version "3.1";
 (:  GENERALIZED REQUEST FUNCTIONS  :)
 
   
-  declare function oaixq:get-record($parameter-map as map(xs:string, xs:string*)) {
+  declare function oaixq:get-record($parameter-map as map(xs:string, item()?)) {
     let $recordId := $parameter-map?('identifier')
     let $metadataPrefix := $parameter-map?('metadataPrefix')
     let $header := oaixq:function-lookup('get-header')($recordId)
@@ -151,7 +152,7 @@ xquery version "3.1";
         </GetRecord>
   };
   
-  declare function oaixq:identify($parameter-map as map(xs:string, xs:string*)) {
+  declare function oaixq:identify($parameter-map as map(xs:string, item()?)) {
     let $confIdentify := $oaixq:configuration//*:Identify
     let $oaiProtocol := <protocolVersion>2.0</protocolVersion>
     let $earliestDatestamp := <earliestDatestamp></earliestDatestamp>
@@ -169,7 +170,7 @@ xquery version "3.1";
       return $useIdentify
   };
   
-  declare function oaixq:list-identifiers($parameter-map as map(xs:string, xs:string*)) {
+  declare function oaixq:list-identifiers($parameter-map as map(xs:string, item()?)) {
     let $from := $parameter-map?('from')
     let $until := $parameter-map?('until')
     let $metadataPrefix := $parameter-map?('metadataPrefix')
@@ -188,7 +189,7 @@ xquery version "3.1";
         </ListIdentifiers>
   };
   
-  declare function oaixq:list-metadata-formats($parameter-map as map(xs:string, xs:string*)) {
+  declare function oaixq:list-metadata-formats($parameter-map as map(xs:string, item()?)) {
     let $recordId := $parameter-map?('identifier')
     let $formats := oaixq:function-lookup('list-metadata-formats')($recordId)
     return
@@ -202,7 +203,7 @@ xquery version "3.1";
         </ListMetadataFormats>
   };
   
-  declare function oaixq:list-records($parameter-map as map(xs:string, xs:string*)) {
+  declare function oaixq:list-records($parameter-map as map(xs:string, item()?)) {
     let $from := $parameter-map?('from')
     let $until := $parameter-map?('until')
     let $metadataPrefix := $parameter-map?('metadataPrefix')
@@ -264,6 +265,26 @@ xquery version "3.1";
       <error code="{$code}">{ $errorDescriptions?($code) }</error>
   };
   
+  declare %private function oaixq:get-usable-date($date as xs:string*, $parameter-name as xs:string) {
+    let $errorMsg :=
+      concat('The parameter "',$parameter-name,'" must use the format "YYYY-MM-DD"')
+    return
+      if ( empty($date) ) then ()
+      else if ( count($date) gt 1 ) then $date
+      else if ( $date castable as xs:dateTime ) then
+        if ( not(oaixq:supports-dateTime()) ) then
+          <error code="badArgument">{$errorMsg}.</error>
+        else $date cast as xs:dateTime
+      else if ( $date castable as xs:date ) then
+        $date cast as xs:date
+      else
+        <error code="badArgument">{$errorMsg}{ 
+            if ( oaixq:supports-dateTime() ) then
+              ' or "YYYY-MM-DDThh:mm:ssZ"'
+            else ''
+          }.</error>
+  };
+  
   (: Translate the current xs:dateTime into the format described by the OAI-PMH standard and this
     repository's configuration file. :)
   declare %private function oaixq:get-utc-datestamp() {
@@ -274,7 +295,6 @@ xquery version "3.1";
   (: Translate a given xs:dateTime into the format described by the OAI-PMH standard and this 
     repository's configuration file. Datestamps must use Coordinated Universal Time. :)
   declare %private function oaixq:get-utc-datestamp($dateTime as xs:dateTime) {
-    let $granularity := $oaixq:configuration//*:granularity/text()
     let $explicitTimezone := timezone-from-dateTime($dateTime)
     (: If $dateTime does not include an explicitly-set timezone, try to use the implicit timezone used 
       by the processor. :)
@@ -292,8 +312,9 @@ xquery version "3.1";
       the full dateTime is used, rather than the date-only format. :)
     let $picture := 
       let $time :=
-        if ( $granularity eq 'YYYY-MM-DD' ) then ''
-        else 'T[h01]:[m01]:[s01]Z'
+        if ( oaixq:supports-dateTime() ) then
+          'T[h01]:[m01]:[s01]Z'
+        else ''
       return 
         concat('[Y0001]-[M01]-[D01]', $time)
     return
@@ -302,7 +323,7 @@ xquery version "3.1";
   
   (: Create an OAI-PMH query response wrapper around the verb-specific response. :)
   declare %private function oaixq:format-response($response as node()+, $verb as xs:string?, 
-     $parameter-map as map(xs:string, xs:string*)?) {
+     $parameter-map as map(xs:string, item()*)?) {
     <OAI-PMH xmlns="http://www.openarchives.org/OAI/2.0/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
        xmlns:oai="http://www.openarchives.org/OAI/2.0/"
        xsi:schemaLocation="http://www.openarchives.org/OAI/2.0/ http://www.openarchives.org/OAI/2.0/OAI-PMH.xsd">
@@ -314,9 +335,9 @@ xquery version "3.1";
           for $paramName in map:keys($parameter-map)
           let $requestedValue := $parameter-map?($paramName)
           return
-            if ( empty($requestedValue) ) then ()
-            else
-              attribute { $paramName } { $requestedValue }
+            if ( exists($requestedValue) and $requestedValue castable as xs:string ) then
+              attribute { $paramName } { $requestedValue cast as xs:string }
+            else ()
         )
         ,
         request:uri()
@@ -341,15 +362,18 @@ xquery version "3.1";
       else
         let $verbDef := $oaixq:request-types?($verb)
         let $handlerFn := $verbDef?('handler')
+        let $useFrom := oaixq:get-usable-date($from, 'from')
+        let $useUntil := oaixq:get-usable-date($until, 'until')
         let $paramMap := map {
             'identifier':     $id,
             'metadataPrefix': $metadata-prefix,
-            'from':           $from,
-            'until':          $until,
+            'from':           $useFrom,
+            'until':          $useUntil,
             'set':            $set,
             'resumptionToken':$token
           }
-        let $badArgumentErr := oaixq:validate-arguments($paramMap, $verbDef?('parameters'))
+        let $badArgumentErr := 
+          oaixq:validate-arguments($paramMap, $verbDef?('parameters'))
         let $responseContent :=
           if ( exists($badArgumentErr) ) then $badArgumentErr
           else $handlerFn($paramMap)
@@ -361,10 +385,14 @@ xquery version "3.1";
     exists( $oaixq:configuration//*:ListSets/*:set )
   };
   
+  declare %private function oaixq:supports-dateTime() as xs:boolean {
+    $oaixq:configuration//*:granularity[1]/text() eq "YYYY-MM-DDThh:mm:ssZ"
+  };
+  
   (: An OAI-PMH request argument is only valid if (1) all required parameters are present; (2) all 
     expected parameters have only one value (no doubled parameters); and (3) there aren't any unexpected 
     parameters. :)
-  declare %private function oaixq:validate-arguments($parameter-map as map(xs:string, xs:string*), 
+  declare %private function oaixq:validate-arguments($parameter-map as map(xs:string, item()*), 
      $expected-parameters as map(xs:string, xs:string*)?) as node()* {
     let $expectedKeys := 
       if ( not(empty($expected-parameters)) ) then
@@ -379,6 +407,8 @@ xquery version "3.1";
           <error code="badArgument">Missing required parameter "{$paramName}".</error>
         else if ( count($requestedValue) gt 1 ) then
           <error code="badArgument">Only one value is allowed for parameter "{$paramName}".</error>
+        else if ( $requestedValue instance of element(error) ) then
+          $requestedValue
         else ()
     (: Make sure the other OAI-PMH parameters aren't present. 
         TODO: look for parameters in the request which were ignored by the RESTXQ interface. :)

@@ -205,20 +205,20 @@ xquery version "3.1";
   (:~
     Construct a query in CQL to find all OAI-PMH records between two dates.
    :)
-  declare %private function oaisru:query-by-date-range($from as item()?, $to as xs:date?) {
+  declare %private function oaisru:query-by-date-range($from as item()?, $to as item()?) {
     let $useFrom :=
       if ( $from castable as xs:date ) then
-        concat('oai.datestamp &gt;= "', $from,'"')
+        concat('oai.datestamp&gt;="', $from,'"')
       else ()
     let $useTo :=
       if ( $to castable as xs:date ) then
-        concat('oai.datestamp &lt;= "', $from,'"')
+        concat('oai.datestamp&lt;="', $from,'"')
       else ()
     return 
       if ( empty($useFrom) and empty($useTo) ) then
         'oai.datestamp=all'
       else
-        string-join(($useFrom, $useTo), ' and ')
+        string-join(($useFrom, $useTo), '%20and%20')
   };
   
   (:~
