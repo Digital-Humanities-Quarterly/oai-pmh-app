@@ -193,7 +193,7 @@ xquery version "3.1";
     let $totalRecords := 
       $req1/sru:searchRetrieveResponse/sru:numberOfRecords/xs:integer(.)
     let $resToken :=
-      oaixq:generate-resumption-token((), $start-record - 1, $totalRecords)
+      oaixq:set-resumption-token((), $start-record - 1, $totalRecords)
     return
       if ( count($records) gt $target ) then
         ( subsequence($records, 1, $target), $resToken )

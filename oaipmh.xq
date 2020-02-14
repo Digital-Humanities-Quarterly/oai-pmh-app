@@ -41,7 +41,7 @@ xquery version "3.1";
               'until': 'optional',
               'metadataPrefix': 'required',
               'set': 'optional',
-              'resumptionToken': 'optional'
+              'resumptionToken': 'exclusive'
             }
         },
       'ListMetadataFormats': map {
@@ -57,13 +57,13 @@ xquery version "3.1";
               'until': 'optional',
               'metadataPrefix': 'required',
               'set': 'optional',
-              'resumptionToken': 'optional'
+              'resumptionToken': 'exclusive'
             }
         },
       'ListSets': map {
           'handler': oaixq:list-sets#1,
           'parameters': map {
-              'resumptionToken': 'optional'
+              'resumptionToken': 'exclusive'
             }
         }
     };
@@ -171,11 +171,11 @@ xquery version "3.1";
   };
   
   declare function oaixq:list-identifiers($parameter-map as map(xs:string, item()?)) {
+    let $resumptionToken := $parameter-map?('resumptionToken')
     let $from := $parameter-map?('from')
     let $until := $parameter-map?('until')
     let $metadataPrefix := $parameter-map?('metadataPrefix')
     let $set := $parameter-map?('set')
-    let $resumptionToken := $parameter-map?('resumptionToken')
     let $recordSet := 
       oaixq:function-lookup('list-identifiers')($metadataPrefix, $from, $until, $set, $resumptionToken)
     return
@@ -268,8 +268,17 @@ xquery version "3.1";
       <error code="{$code}">{ $errorDescriptions?($code) }</error>
   };
   
-  declare function oaixq:generate-resumption-token($token as xs:string?, $record-index as 
-     xs:integer, $total-size as xs:integer?) {
+  declare function oaixq:generate-base-resumption-token($parameter-map as map(xs:string, item()*)) {
+    let $paramKeys := map:keys($parameter-map)[. ne 'resumptionToken']
+    let $paramStr :=
+      for $key in $paramKeys
+      return concat($key,'=',$parameter-map?($key))
+    return
+      string-join($paramStr, '&amp;')
+  };
+  
+  declare function oaixq:set-resumption-token($token-base as xs:string?, $record-index as xs:integer, 
+     $total-size as xs:integer?) {
     let $cursor :=
       if ( $record-index ge 0 ) then
         attribute cursor { $record-index }
@@ -278,8 +287,9 @@ xquery version "3.1";
       if ( exists($total-size) and $total-size gt 0 ) then
         attribute completeListSize { $total-size }
       else ()
+    let $token := concat('cursor=', $record-index, $token-base)
     return
-      <resumptionToken>{ $cursor, $listSize }</resumptionToken>
+      <resumptionToken>{ $cursor, $listSize, text { $token } }</resumptionToken>
   };
   
   declare %private function oaixq:get-usable-date($date as xs:string*, $parameter-name as xs:string) {
@@ -408,13 +418,20 @@ xquery version "3.1";
   
   (: An OAI-PMH request argument is only valid if: (1) all required parameters are present; (2) all 
     expected parameters have only one value (no doubled parameters); and (3) there aren't any unexpected 
-    parameters. :)
+    parameters. Unless, (4) an exclusive parameter value has been set, in which case no otherwise-valid 
+    parameters can be present. :)
   declare %private function oaixq:validate-arguments($parameter-map as map(xs:string, item()*), 
      $expected-parameters as map(xs:string, xs:string*)?) as node()* {
     let $expectedKeys := 
       if ( not(empty($expected-parameters)) ) then
         map:keys($expected-parameters)
       else ()
+    let $exclusiveArgs := 
+      $expectedKeys[$expected-parameters?(.) eq 'exclusive']
+    let $expectedKeys :=
+      if ( exists($exclusiveArgs) and count($parameter-map?($exclusiveArgs)) eq 1 ) then
+        $exclusiveArgs
+      else $expectedKeys
     let $findErrorsInExpectedArgs :=
       for $paramName in $expectedKeys
       let $isRequired := $expected-parameters?($paramName) eq 'required'
@@ -433,7 +450,10 @@ xquery version "3.1";
       for $paramName in map:keys($parameter-map)[not(. = $expectedKeys)]
       let $requestedValue := $parameter-map?($paramName)
       return 
-        if ( count($requestedValue) eq 0 ) then () 
+        if ( count($requestedValue) eq 0 ) then ()
+        else if ( map:contains($expected-parameters, $paramName) and exists($exclusiveArgs) ) then
+          <error code="badArgument">Parameter "{$paramName}" is not allowed when the resumption token 
+            is set.</error>
         else
           <error code="badArgument">Parameter "{$paramName}" is not allowed for this verb.</error>
     return
