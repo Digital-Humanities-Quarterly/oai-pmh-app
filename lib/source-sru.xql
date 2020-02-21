@@ -173,9 +173,7 @@ xquery version "3.1";
    :)
   declare function oaisru:manage-results($schema as xs:anyURI, $query as xs:string, 
      $start-record as xs:integer) {
-    let $oaiMax := 
-      doc('../CONFIG.xml')//ListX/resumptionToken/@maximumListSize/xs:integer(.)
-    return oaisru:manage-results($schema, $query, $start-record, $oaiMax)
+    oaisru:manage-results($schema, $query, $start-record, $oaixq:maximum-list-size)
   };
   
   (:~

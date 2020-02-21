@@ -21,6 +21,8 @@ xquery version "3.1";
 
 (:  VARIABLES  :)
   declare variable $oaixq:configuration := doc('CONFIG.xml')/*;
+  declare variable $oaixq:maximum-list-size := 
+    $oaixq:configuration/*:ListX/*:resumptionToken/@maximumListSize/xs:integer(.);
   declare variable $oaixq:request-types := 
     map {
       'GetRecord': map {
@@ -269,10 +271,11 @@ xquery version "3.1";
   };
   
   declare function oaixq:generate-base-resumption-token($parameter-map as map(xs:string, item()*)) {
-    let $paramKeys := map:keys($parameter-map)[. ne 'resumptionToken']
+    let $paramKeys := map:keys($parameter-map)[not(. = ('cursor', 'resumptionToken'))]
     let $paramStr :=
       for $key in $paramKeys
-      return concat($key,'=',$parameter-map?($key))
+      let $value := $parameter-map?($key)
+      return concat($key,'=',$value)
     return
       string-join($paramStr, '&amp;')
   };
@@ -287,7 +290,9 @@ xquery version "3.1";
       if ( exists($total-size) and $total-size gt 0 ) then
         attribute completeListSize { $total-size }
       else ()
-    let $token := concat('cursor=', $record-index, $token-base)
+    let $token := 
+      let $newCursor := xs:integer($record-index) + $oaixq:maximum-list-size + 1
+      return concat('cursor=', xs:string($newCursor), $token-base)
     return
       <resumptionToken>{ $cursor, $listSize, text { $token } }</resumptionToken>
   };
@@ -428,6 +433,7 @@ xquery version "3.1";
       else ()
     let $exclusiveArgs := 
       $expectedKeys[$expected-parameters?(.) eq 'exclusive']
+    (: If this request includes an exclusive parameter, reduce $expectedKeys to the exclusive one. :)
     let $expectedKeys :=
       if ( exists($exclusiveArgs) and count($parameter-map?($exclusiveArgs)) eq 1 ) then
         $exclusiveArgs
